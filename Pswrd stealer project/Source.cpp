@@ -14,6 +14,7 @@
 using namespace std;
 
 string DecryptData(const vector<unsigned char>& encryptedData) {
+   
     DATA_BLOB encryptedBlob;
     encryptedBlob.cbData = static_cast<DWORD>(encryptedData.size());
     encryptedBlob.pbData = const_cast<BYTE*>(encryptedData.data());
@@ -25,7 +26,9 @@ string DecryptData(const vector<unsigned char>& encryptedData) {
 
     string decryptedData(reinterpret_cast<const char*>(decryptedBlob.pbData), decryptedBlob.cbData);
     LocalFree(decryptedBlob.pbData);
+  
     return decryptedData;
+
 }
 
 int main() {
@@ -41,10 +44,11 @@ int main() {
 
     if (masterKeyFile.is_open()) {
         string encodedKey;
+        
         while (getline(masterKeyFile, masterKeyFileContent)) {
             encodedKey += masterKeyFileContent;
         }
-        masterKeyFile.close();
+         masterKeyFile.close();
 
         // Extract the encrypted key from the Local State file content
         const size_t pos = encodedKey.find("\"encrypted_key\":\"") + 17;
@@ -52,22 +56,25 @@ int main() {
 
         // Decode the base64-encoded key
         string decodedKey;
+        
         DWORD decodedSize = 0;
-        CryptStringToBinaryA(encodedKey.c_str(), static_cast<DWORD>(encodedKey.size()), CRYPT_STRING_BASE64, nullptr, &decodedSize, nullptr, nullptr);
+            CryptStringToBinaryA(encodedKey.c_str(), static_cast<DWORD>(encodedKey.size()), CRYPT_STRING_BASE64, nullptr, &decodedSize, nullptr, nullptr);
         decodedKey.resize(decodedSize);
-        CryptStringToBinaryA(encodedKey.c_str(), static_cast<DWORD>(encodedKey.size()), CRYPT_STRING_BASE64, reinterpret_cast<BYTE*>(&decodedKey[0]), &decodedSize, nullptr, nullptr);
+            CryptStringToBinaryA(encodedKey.c_str(), static_cast<DWORD>(encodedKey.size()), CRYPT_STRING_BASE64, reinterpret_cast<BYTE*>(&decodedKey[0]), &decodedSize, nullptr, nullptr);
 
         // Decrypt the key using DPAPI
         string decryptedKey = DecryptData(vector<unsigned char>(decodedKey.begin() + 5, decodedKey.end()));
 
-        // Use the decrypted key as needed
+       
+        // Uses the decrypted key 
         cout << "Decrypted Key: " << decryptedKey << endl;
+    
     }
+    
     else {
-        cout << "Unable to fetch Local State file." << endl;
+        cout << "Unable to fetch Local State file." << endl;   
     }
 
-    // Rest of the code...
+    return 1;
 
-    return 0;
 }
